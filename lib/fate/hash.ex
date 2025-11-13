@@ -194,7 +194,7 @@ defmodule Fate.Hash do
     defp fnv1a64(<<>>, hash), do: hash
 
     defp fnv1a64(<<byte::unsigned-integer-size(8), rest::binary>>, hash) do
-      updated = ((bxor(hash, byte)) * @prime) &&& @mask
+      updated = bxor(hash, byte) * @prime &&& @mask
       fnv1a64(rest, updated)
     end
   end

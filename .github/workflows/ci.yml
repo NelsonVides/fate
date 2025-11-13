@@ -15,10 +15,6 @@ jobs:
         include:
           - elixir: "1.17"
             otp: "27"
-          - elixir: "1.16"
-            otp: "26"
-          - elixir: "1.15"
-            otp: "25"
       fail-fast: false
 
     steps:

@@ -46,6 +46,7 @@ defmodule Fate.MixProject do
       {:cuckoo_filter, "~> 1.0", only: :dev},
       {:talan, "~> 0.2", only: :dev},
       {:excoveralls, "~> 0.18", only: :test},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:hll, "~> 0.1", only: :dev, optional: true},
       {:hypex, "~> 1.1", only: :dev, optional: true},
       {:xxh3, "~> 0.3", optional: true},

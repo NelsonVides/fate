@@ -175,6 +175,7 @@ defmodule Fate.Cardinality.HyperLogLog do
 
   @compile {:inline, clz_fast: 2}
   defp clz_fast(0, bits), do: bits
+
   defp clz_fast(value, bits) do
     mask = if bits >= 63, do: -1, else: (1 <<< bits) - 1
     clz_fast(value &&& mask, bits, 0)
@@ -211,7 +212,7 @@ defmodule Fate.Cardinality.HyperLogLog do
   end
 
   defp clz_fast(value, bits, acc) do
-    top = value &&& ((1 <<< bits) - 1)
+    top = value &&& (1 <<< bits) - 1
 
     if top == 0 do
       acc + bits
@@ -298,7 +299,6 @@ defmodule Fate.Cardinality.HyperLogLog do
     hll
   end
 
-
   # Get register value (6-bit, 0-63, standard for HyperLogLog)
   defp get_register(%__MODULE__{} = hll, index) do
     # Each register is 6 bits, packed into 64-bit words
@@ -334,7 +334,7 @@ defmodule Fate.Cardinality.HyperLogLog do
     else
       # Clear the 8-bit slot and set new value
       clear_mask = bnot(0xFF <<< bit_offset)
-      new_value = band(current, clear_mask) ||| (value <<< bit_offset)
+      new_value = band(current, clear_mask) ||| value <<< bit_offset
 
       case :atomics.compare_exchange(atomics, atomic_idx, current, new_value) do
         :ok -> :ok
@@ -342,7 +342,6 @@ defmodule Fate.Cardinality.HyperLogLog do
       end
     end
   end
-
 
   # Calculate raw estimate using harmonic mean
   # Optimized to process registers in batches from atomic words
@@ -364,27 +363,29 @@ defmodule Fate.Cardinality.HyperLogLog do
   end
 
   # Fast path: process all 8 registers in a word at once
-  defp sum_inverse_powers_fast(_atomics, word_count, word_idx, acc) when word_idx >= word_count, do: acc
+  defp sum_inverse_powers_fast(_atomics, word_count, word_idx, acc) when word_idx >= word_count,
+    do: acc
 
   defp sum_inverse_powers_fast(atomics, word_count, word_idx, acc) do
     word = :atomics.get(atomics, word_idx + 1)
 
     # Fast path: skip if word is all zeros
-    new_acc = if word == 0 do
-      # All 8 registers are 0, so add 8.0 (2^(-0) = 1 for each)
-      acc + 8.0
-    else
-      # Extract and process all 8 registers in this word
-      acc
-      |> add_inverse_power(band(word, 0xFF))
-      |> add_inverse_power(band(word >>> 8, 0xFF))
-      |> add_inverse_power(band(word >>> 16, 0xFF))
-      |> add_inverse_power(band(word >>> 24, 0xFF))
-      |> add_inverse_power(band(word >>> 32, 0xFF))
-      |> add_inverse_power(band(word >>> 40, 0xFF))
-      |> add_inverse_power(band(word >>> 48, 0xFF))
-      |> add_inverse_power(band(word >>> 56, 0xFF))
-    end
+    new_acc =
+      if word == 0 do
+        # All 8 registers are 0, so add 8.0 (2^(-0) = 1 for each)
+        acc + 8.0
+      else
+        # Extract and process all 8 registers in this word
+        acc
+        |> add_inverse_power(band(word, 0xFF))
+        |> add_inverse_power(band(word >>> 8, 0xFF))
+        |> add_inverse_power(band(word >>> 16, 0xFF))
+        |> add_inverse_power(band(word >>> 24, 0xFF))
+        |> add_inverse_power(band(word >>> 32, 0xFF))
+        |> add_inverse_power(band(word >>> 40, 0xFF))
+        |> add_inverse_power(band(word >>> 48, 0xFF))
+        |> add_inverse_power(band(word >>> 56, 0xFF))
+      end
 
     sum_inverse_powers_fast(atomics, word_count, word_idx + 1, new_acc)
   end
@@ -393,7 +394,6 @@ defmodule Fate.Cardinality.HyperLogLog do
   @compile {:inline, add_inverse_power: 2}
   defp add_inverse_power(acc, 0), do: acc + 1.0
   defp add_inverse_power(acc, register_value), do: acc + 1.0 / (1 <<< register_value)
-
 
   # Get alpha constant based on precision
   defp alpha_m(4), do: @alpha_m_4
@@ -418,7 +418,7 @@ defmodule Fate.Cardinality.HyperLogLog do
       end
     else
       # Large range correction (for very large cardinalities)
-      if raw_estimate > (1.0 / 30.0) * :math.pow(2, 64) do
+      if raw_estimate > 1.0 / 30.0 * :math.pow(2, 64) do
         -:math.pow(2, 64) * :math.log(1.0 - raw_estimate / :math.pow(2, 64))
       else
         raw_estimate
@@ -427,7 +427,8 @@ defmodule Fate.Cardinality.HyperLogLog do
   end
 
   # Count zero registers - optimized to process words directly
-  defp count_zero_registers(%__MODULE__{} = hll, index, acc) when index >= hll.register_count, do: acc
+  defp count_zero_registers(%__MODULE__{} = hll, index, acc) when index >= hll.register_count,
+    do: acc
 
   defp count_zero_registers(%__MODULE__{} = hll, word_idx, acc) do
     word_count = div(hll.register_count + 7, 8)
@@ -456,7 +457,6 @@ defmodule Fate.Cardinality.HyperLogLog do
   defp count_if_zero(0), do: 1
   defp count_if_zero(_), do: 0
 
-
   defp empty_like(%__MODULE__{} = hll) do
     new(precision: hll.precision, hash_module: hll.hash_module)
   end
@@ -474,8 +474,9 @@ defmodule Fate.Cardinality.HyperLogLog do
     a.precision == b.precision and a.hash_module == b.hash_module
   end
 
-  defp validate_precision!(precision) when is_integer(precision) and precision >= @min_precision and
-                                             precision <= @max_precision do
+  defp validate_precision!(precision)
+       when is_integer(precision) and precision >= @min_precision and
+              precision <= @max_precision do
     precision
   end
 
