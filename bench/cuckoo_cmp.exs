@@ -6,10 +6,13 @@ alias Fate.Hash
 inputs =
   %{
     "1k integers" => Enum.to_list(1..1_000),
-    "10k integers" => Enum.to_list(1..10_000)
+    "10k integers" => Enum.to_list(1..10_000),
+    "100k integers" => Enum.to_list(1..100_000),
+    "1M integers" => Enum.to_list(1..1_000_000)
   }
 
-hash_module = Hash.module(preferred: [Fate.Hash.XXH3, Fate.Hash.XXHash, Fate.Hash.Murmur3])
+# Use Default (phash2) for fair comparison with Erlang cuckoo_filter
+hash_module = Fate.Hash.Default
 
 Benchee.run(
   %{

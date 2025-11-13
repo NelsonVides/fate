@@ -7,7 +7,28 @@ defmodule Fate.MixProject do
       version: "0.1.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ],
+      description: "High-performance probabilistic data structures for Elixir",
+      package: [
+        maintainers: ["Gustavo Gawryszewski"],
+        licenses: ["MIT"],
+        links: %{
+          "GitHub" => "https://github.com/gawryco/fate",
+          "Hex" => "https://hex.pm/packages/fate"
+        },
+        files: ~w(lib mix.exs README.md LICENSE .formatter.exs)
+      ],
+      docs: [
+        main: "readme",
+        extras: ["README.md"]
+      ]
     ]
   end
 
@@ -24,6 +45,7 @@ defmodule Fate.MixProject do
       {:benchee, "~> 1.2", only: :dev},
       {:cuckoo_filter, "~> 1.0", only: :dev},
       {:talan, "~> 0.2", only: :dev},
+      {:excoveralls, "~> 0.18", only: :test},
       {:xxh3, "~> 0.3", optional: true},
       {:xxhash, "~> 0.3", optional: true},
       {:murmur, "~> 2.0", optional: true}

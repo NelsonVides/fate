@@ -2,16 +2,64 @@ defmodule Fate.Hash do
   @moduledoc """
   Behaviour and helper functions for pluggable hashing within Fate data structures.
 
-  The module decides at runtime which hashing backend to use. Supported backends:
+  This module defines a behaviour for hash providers and includes implementations
+  for several popular hash functions. Each provider checks availability at runtime,
+  allowing optional dependencies.
 
-    * `Fate.Hash.XXH3` – requires the optional `:xxh3` dependency.
-    * `Fate.Hash.XXHash` – requires the optional `:xxhash` dependency.
-    * `Fate.Hash.Murmur3` – requires the optional `:murmur` dependency.
-    * `Fate.Hash.FNV1a` – pure Elixir fallback following the FNV-1a 64-bit variant.
-    * `Fate.Hash.Default` – deterministic fallback based on `:erlang.phash2/2`.
+  ## Available Hash Functions
 
-  Custom hash providers can implement this behaviour and be passed through the
-  `:hash_module` option where applicable.
+  - `Fate.Hash.XXH3` - Fastest for most workloads (requires `{:xxh3, "~> 0.3"}`)
+  - `Fate.Hash.XXHash` - Fast general-purpose hash (requires `{:xxhash, "~> 0.3"}`)
+  - `Fate.Hash.Murmur3` - Good distribution (requires `{:murmur, "~> 2.0"}`)
+  - `Fate.Hash.FNV1a` - Pure Elixir, no dependencies
+  - `Fate.Hash.Default` - Erlang's `:erlang.phash2` (always available)
+
+  ## Performance Characteristics
+
+  For simple types (integers, atoms, small binaries):
+  - `Default` (phash2) is often fastest due to being a native BIF
+  - `XXH3` is competitive and better for larger inputs
+
+  For complex types or cross-language consistency:
+  - `XXH3` offers best performance
+  - `Murmur3` provides excellent distribution
+  - `XXHash` is a good middle ground
+
+  ## Examples
+
+      # Auto-select best available hash
+      hash_module = Fate.Hash.module()
+
+      # Prefer specific hash functions
+      hash_module = Fate.Hash.module(preferred: [
+        Fate.Hash.XXH3,
+        Fate.Hash.Murmur3,
+        Fate.Hash.Default
+      ])
+
+      # Check if a hash function is available
+      Fate.Hash.available?(Fate.Hash.XXH3)  # => true/false
+
+      # Use a hash function directly
+      Fate.Hash.hash(Fate.Hash.Default, "hello", 0)  # => integer
+
+  ## Implementing Custom Hash Functions
+
+      defmodule MyHash do
+        @behaviour Fate.Hash
+
+        @impl true
+        def available?, do: true
+
+        @impl true
+        def hash(term, seed) do
+          # Your hash implementation
+          :erlang.phash2({term, seed})
+        end
+      end
+
+      # Use your custom hash
+      bloom = Fate.Filter.Bloom.new(1000, hash_module: MyHash)
   """
 
   @typedoc "Module implementing the `Fate.Hash` behaviour."
