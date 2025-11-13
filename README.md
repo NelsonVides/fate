@@ -17,6 +17,7 @@ Fate provides concurrent, space-efficient implementations of probabilistic data 
 - [Data Structures](#data-structures)
   - [Bloom Filter](#bloom-filter)
   - [Cuckoo Filter](#cuckoo-filter)
+  - [HyperLogLog](#hyperloglog)
 - [Performance](#performance)
 - [When to Use What](#when-to-use-what)
 - [Documentation](#documentation)
@@ -30,6 +31,7 @@ Fate provides concurrent, space-efficient implementations of probabilistic data 
 - 🚀 **High Performance**: Optimized implementations matching or exceeding Erlang reference libraries
 - 🔒 **Concurrent**: Thread-safe operations using `:atomics` with lock-free reads
 - 🎯 **Pluggable Hashing**: Support for multiple hash functions (xxHash, Murmur3, XXH3, FNV1a)
+- 📊 **Accurate Cardinality**: HyperLogLog delivers lock-free distinct counting at sub-millisecond speeds
 - 📦 **Zero Dependencies**: Core functionality requires no external dependencies
 - 🧪 **Well Tested**: Comprehensive test coverage (~87%) with 61+ tests
 - 🔄 **Production Ready**: Battle-tested algorithms with comprehensive error handling
@@ -185,6 +187,42 @@ end
 
 **Performance**: On par with Erlang reference implementation when using the same hash function
 
+### HyperLogLog
+
+Approximate distinct counter with configurable precision and lock-free updates, ideal for large-scale analytics.
+
+**Key Features:**
+- Precision range 4–18 with <1% typical relative error at default settings
+- Lock-free concurrent updates backed by `:atomics`
+- Supports `add_hashed/2` for workloads that already have 64-bit hashes
+- Mergeable sketches with serialization support
+
+**Example:**
+
+```elixir
+alias Fate.Cardinality.HyperLogLog
+
+# Create a sketch with default precision (14)
+hll = HyperLogLog.new()
+
+# Add raw items using the selected hash module
+Enum.each(1..1_000, &HyperLogLog.add(hll, &1))
+
+# Or skip hashing if you already have 64-bit hashes
+Enum.each(1..1_000, fn value ->
+  hash = :erlang.phash2({value, 0})
+  HyperLogLog.add_hashed(hll, hash)
+end)
+
+# Estimate distinct count
+HyperLogLog.cardinality(hll)  # => ~1000
+
+# Merge sketches
+merged = HyperLogLog.merge([hll, HyperLogLog.new()])
+```
+
+**Performance**: Outruns Erlang `HLL` and Elixir `Hypex` when fed pre-hashed values (see [Performance](#performance))
+
 ## Configuration
 
 ### Custom Hash Functions
@@ -255,6 +293,25 @@ mix run bench/bloom_cmp.exs
 mix run bench/cuckoo_cmp.exs
 ```
 
+### HyperLogLog vs HLL / Hypex
+
+```
+# Insert 1M hashed values (phash2)
+Fate.HyperLogLog add_hashed/2   5.22 ips (191.75 ms)
+HLL.add/2                       3.19 ips (313.88 ms) - 1.64x slower
+Hypex.update/2                  2.68 ips (373.43 ms) - 1.95x slower
+
+# Insert 1k raw values
+Fate.HyperLogLog add/2          1.92 K ips (520.71 µs)
+HLL.add/2                       2.86 K ips (349.85 µs) - 1.49x faster
+Hypex.update/2                  1.15 K ips (872.18 µs) - 1.67x slower
+
+# Cardinality (1M values)
+Fate.HyperLogLog cardinality    1.24 K ips (805.81 µs)
+HLL.cardinality                 0.72 K ips (1397.38 µs) - 1.73x slower
+Hypex.cardinality               1.15 K ips (867.12 µs) - 1.08x slower
+```
+
 ## When to Use What
 
 ### Use Bloom Filter when:
@@ -270,6 +327,13 @@ mix run bench/cuckoo_cmp.exs
 - ✅ You need exact item counts
 - ✅ You need set operations with deletion support
 - ✅ Slightly higher memory usage than Bloom is acceptable
+
+### Use HyperLogLog when:
+- ✅ You need approximate distinct counts with fixed memory
+- ✅ Lock-free concurrent updates are important
+- ✅ Sub-millisecond cardinality queries matter
+- ✅ You can tolerate small relative error (≈1% by default)
+- ✅ You already hash keys and want to reuse those 64-bit hashes (via `add_hashed/2`)
 
 ## Documentation
 
@@ -311,7 +375,6 @@ mix coveralls.html
 
 Future data structures planned:
 - Count-Min Sketch (frequency estimation)
-- HyperLogLog (cardinality estimation)
 - Quotient Filter (compact alternative to Cuckoo)
 
 ## Contributing
