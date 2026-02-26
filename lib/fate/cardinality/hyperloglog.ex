@@ -491,7 +491,7 @@ defmodule Fate.Cardinality.HyperLogLog do
     Enum.each(hlls, fn hll ->
       unless compatible?(hll, reference) do
         raise ArgumentError,
-              "HyperLogLog sketches must share precision and hash_module for merging"
+              "HyperLogLog sketches must share precision, hash_module, and mode for merging"
       end
     end)
   end
