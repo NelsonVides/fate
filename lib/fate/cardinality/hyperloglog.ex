@@ -547,58 +547,79 @@ defmodule Fate.Cardinality.HyperLogLog do
     end
   end
 
-  # Estimate bias using linear interpolation over empirical tables
+  # Estimate bias using k-nearest-neighbor averaging over the empirical tables,
+  # as described in Heule et al. (2013) Section 5. Finds the 6 entries in
+  # rawEstimateData closest to the raw estimate and averages their corresponding
+  # biasData values.
+  #
+  # Since the table is approximately sorted, we binary search to find the nearest
+  # index, then expand outward to collect k=6 neighbors. O(log n + k) instead of
+  # O(n log n) for a full sort.
+  @knn_k 6
+
   defp estimate_bias(raw_estimate, precision) do
     raw_estimates = BiasData.raw_estimates(precision)
     biases = BiasData.biases(precision)
     size = BiasData.table_size(precision)
 
-    {left, right} = binary_search_nearest(raw_estimates, raw_estimate, size)
+    k = min(@knn_k, size)
 
-    if left == right do
-      elem(biases, left)
-    else
-      e1 = elem(raw_estimates, left)
-      e2 = elem(raw_estimates, right)
-      b1 = elem(biases, left)
-      b2 = elem(biases, right)
+    # Binary search for the closest index
+    center = binary_search_closest(raw_estimates, raw_estimate, size)
 
-      # Guard against duplicate table entries (avoids division by zero)
-      if e2 == e1 do
-        b1
-      else
-        c = (raw_estimate - e1) / (e2 - e1)
-        b1 * (1.0 - c) + b2 * c
-      end
-    end
+    # Expand outward from center to collect k nearest neighbors
+    indices = knn_expand(raw_estimates, raw_estimate, center, k, size)
+
+    # Average the bias values at those indices
+    sum = Enum.reduce(indices, 0.0, fn i, acc -> acc + elem(biases, i) end)
+    sum / k
   end
 
-  # Binary search for the two nearest bracketing indices in a sorted tuple.
-  # Returns {left, right} where elem(tuple, left) <= value <= elem(tuple, right).
-  # Clamps to boundaries when value is outside the range.
-  defp binary_search_nearest(sorted_tuple, value, size) do
-    first = elem(sorted_tuple, 0)
-    last = elem(sorted_tuple, size - 1)
-
-    cond do
-      value <= first -> {0, 0}
-      value >= last -> {size - 1, size - 1}
-      true -> do_binary_search(sorted_tuple, value, 0, size - 1)
-    end
+  # Binary search for the index of the closest value in a sorted tuple.
+  defp binary_search_closest(tuple, value, size) do
+    do_bsearch(tuple, value, 0, size - 1)
   end
 
-  defp do_binary_search(_tuple, _value, low, high) when high - low <= 1 do
-    {low, high}
+  defp do_bsearch(tuple, value, low, high) when high - low <= 1 do
+    d_low = abs(elem(tuple, low) - value)
+    d_high = abs(elem(tuple, high) - value)
+    if d_low <= d_high, do: low, else: high
   end
 
-  defp do_binary_search(tuple, value, low, high) do
+  defp do_bsearch(tuple, value, low, high) do
     mid = div(low + high, 2)
-    mid_val = elem(tuple, mid)
 
-    cond do
-      mid_val == value -> {mid, mid}
-      mid_val < value -> do_binary_search(tuple, value, mid, high)
-      true -> do_binary_search(tuple, value, low, mid)
+    if elem(tuple, mid) < value do
+      do_bsearch(tuple, value, mid, high)
+    else
+      do_bsearch(tuple, value, low, mid)
+    end
+  end
+
+  # Expand outward from center to collect k nearest indices by distance.
+  # Uses two pointers moving left and right from center.
+  defp knn_expand(tuple, value, center, k, size) do
+    do_knn_expand(tuple, value, center - 1, center, k, size, [])
+  end
+
+  defp do_knn_expand(_tuple, _value, _left, _right, 0, _size, acc), do: acc
+
+  defp do_knn_expand(tuple, value, left, right, remaining, size, acc) when left < 0 do
+    do_knn_expand(tuple, value, left, right + 1, remaining - 1, size, [right | acc])
+  end
+
+  defp do_knn_expand(tuple, value, left, right, remaining, size, acc) when right >= size do
+    do_knn_expand(tuple, value, left - 1, right, remaining - 1, size, [left | acc])
+  end
+
+  defp do_knn_expand(tuple, value, left, right, remaining, size, acc) do
+    d_left = abs(elem(tuple, left) - value)
+    d_right = abs(elem(tuple, right) - value)
+
+    if d_left <= d_right do
+      do_knn_expand(tuple, value, left - 1, right, remaining - 1, size, [left | acc])
+    else
+      do_knn_expand(tuple, value, left, right + 1, remaining - 1, size, [right | acc])
     end
   end
 end
