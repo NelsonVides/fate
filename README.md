@@ -378,7 +378,6 @@ mix coveralls.html
 ## Roadmap
 
 Future data structures planned:
-- Count-Min Sketch (frequency estimation)
 - Quotient Filter (compact alternative to Cuckoo)
 
 ## Contributing
